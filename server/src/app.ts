@@ -59,6 +59,7 @@ const DEFAULT_DASHBOARD_ORIGINS = [
   'http://localhost:5173',
   'http://127.0.0.1:5173',
   'http://[::1]:5173',
+  'https://seu-projeto.vercel.app',  // ← substitua pelo domínio do seu deploy Vercel (ex: freellmapi-xxx.vercel.app)
 ];
 
 // SHA-256 of the inline theme/direction bootstrap in client/index.html, which
