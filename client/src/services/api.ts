@@ -155,5 +155,5 @@ export async function getSearchAnalytics(range: string = '7d'): Promise<SearchAn
 
 // Health check
 export async function checkHealth(): Promise<{ status: string; timestamp: string }> {
-  return fetchJson<{ status: string; timestamp: string }>('/health');
+  return fetchJson<{ status: string; timestamp: string }>(`${API_BASE}/health`);
 }
