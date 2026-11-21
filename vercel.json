@@ -4,6 +4,7 @@
   "installCommand": "cd client && npm install",
   "buildCommand": "cd client && npm run build",
   "outputDirectory": "client/dist",
+  "monoRepoRoot": "client",
   "env": {
     "VITE_API_URL": "@api_base_url"
   },
