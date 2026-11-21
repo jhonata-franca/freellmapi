@@ -1,108 +1,46 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Activity,
-  ArrowRight,
   BarChart3,
   Bolt,
   ChevronRight,
-  Clock,
-  Copy,
   CreditCard,
   Mail,
   Menu,
-  MenuIcon,
-  Phone,
   Plus,
   RefreshCw,
   Send,
   Settings,
   ShieldCheck,
-  Star,
   TrendingUp,
   User,
   X,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import {
+  getAnalyticsSummary,
+  getRecentRequests,
+  getTimeline,
+  getByPlatform,
+  type AnalyticsSummary,
+  type RecentRequest,
+  type TimelineItem,
+  type ByPlatformItem,
+} from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Separator } from '@/components/ui/separator'
 import { Switch } from '@/components/ui/switch'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Badge } from '@/components/ui/badge'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-
-// ── Mock data ────────────────────────────────────────────────────────────────
-
-const STAT_CARDS = [
-  {
-    title: 'Usuários ativos',
-    value: '12.4k',
-    change: '+12%',
-    trend: 'up',
-    icon: User,
-    color: 'text-primary',
-  },
-  {
-    title: 'Receita mensal',
-    value: 'R$ 84.2k',
-    change: '+8%',
-    trend: 'up',
-    icon: CreditCard,
-    color: 'text-primary',
-  },
-  {
-    title: 'Sessões hoje',
-    value: '3.2k',
-    change: '-3%',
-    trend: 'down',
-    icon: Activity,
-    color: 'text-destructive',
-  },
-  {
-    title: 'Taxa de erro',
-    value: '0.4%',
-    change: '-15%',
-    trend: 'down',
-    icon: ShieldCheck,
-    color: 'text-success',
-  },
-]
-
-const RECENT_ACTIVITY = [
-  {
-    id: '1',
-    user: 'Ana Silva',
-    action: 'criou um novo projeto',
-    time: '2 min',
-    avatar: 'AS',
-    status: 'success',
-  },
-  {
-    id: '2',
-    user: 'Carlos Souza',
-    action: 'atualizou configurações',
-    time: '15 min',
-    avatar: 'CS',
-    status: 'info',
-  },
-  {
-    id: '3',
-    user: 'Maria Oliveira',
-    action: 'excluiu um relatório',
-    time: '1 h',
-    avatar: 'MO',
-    status: 'warning',
-  },
-  {
-    id: '4',
-    user: 'João Pereira',
-    action: 'fez login no sistema',
-    time: '3 h',
-    avatar: 'JP',
-    status: 'success',
-  },
-]
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
+import { cn } from '@/lib/utils'
 
 const QUICK_ACTIONS = [
   {
@@ -148,7 +86,7 @@ function StatCard({
   Icon: React.ComponentType<{ className?: string }>
   color: string
 }) {
-  const trendIcon = trend === 'up' ? TrendingUp : X
+  const TrendIcon = trend === 'up' ? TrendingUp : X
   return (
     <Card className="rounded-3xl border border-border/50">
       <CardHeader className="px-4 py-3">
@@ -166,7 +104,7 @@ function StatCard({
         <div className="flex items-baseline gap-1">
           <span className="text-2xl font-bold tabular-nums">{value}</span>
           <span className={cn('text-xs font-medium', trend === 'up' ? 'text-success' : 'text-destructive')}>
-            <trendIcon className="size-3" /> {change}
+            <TrendIcon className="size-3" /> {change}
           </span>
         </div>
       </CardContent>
@@ -227,11 +165,49 @@ function QuickAction({ label, icon: Icon, href, color }: { label: string; icon: 
 
 // ── Dashboard Page ───────────────────────────────────────────────────────────
 
+type TimeRange = '7d' | '30d' | '90d'
+
+const TIME_RANGES: { value: TimeRange; label: string }[] = [
+  { value: '7d', label: 'Últimos 7 dias' },
+  { value: '30d', label: 'Últimos 30 dias' },
+  { value: '90d', label: 'Últimos 90 dias' },
+]
+
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [notificationsEnabled, setNotificationsEnabled] = useState(true)
   const [theme, setTheme] = useState<'light' | 'dark'>('light')
+  const [timeRange, setTimeRange] = useState<TimeRange>('7d')
   const navigate = useNavigate()
+
+  const [stats, setStats] = useState<AnalyticsSummary | null>(null)
+  const [recentRequests, setRecentRequests] = useState<RecentRequest[]>([])
+  const [timeline, setTimeline] = useState<TimelineItem[]>([])
+  const [byPlatform, setByPlatform] = useState<ByPlatformItem[]>([])
+  const [isLoading, setIsLoading] = useState(true)
+
+  useEffect(() => {
+    async function loadData() {
+      setIsLoading(true)
+      try {
+        const [summary, requests, timelineData, platformData] = await Promise.all([
+          getAnalyticsSummary(timeRange),
+          getRecentRequests(timeRange, 5),
+          getTimeline(timeRange, timeRange === '7d' ? 'hour' : 'day'),
+          getByPlatform(timeRange),
+        ])
+        setStats(summary)
+        setRecentRequests(requests.rows)
+        setTimeline(timelineData)
+        setByPlatform(platformData)
+      } catch (error) {
+        console.error('Failed to load dashboard data:', error)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+    loadData()
+  }, [timeRange])
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -330,6 +306,18 @@ export default function DashboardPage() {
             </p>
           </div>
           <div className="flex items-center gap-3">
+            <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
+              <SelectTrigger size="sm" className="w-auto min-w-[150px]">
+                <SelectValue placeholder="Período" />
+              </SelectTrigger>
+              <SelectContent>
+                {TIME_RANGES.map((range) => (
+                  <SelectItem key={range.value} value={range.value}>
+                    {range.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button variant="outline" size="sm" onClick={() => setSidebarOpen(true)}>
               <Menu className="size-4 md:hidden" />
               <span className="hidden md:inline">Menu</span>
@@ -341,11 +329,57 @@ export default function DashboardPage() {
         </header>
 
         {/* Stats Cards - Grid responsive */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          {STAT_CARDS.map((card, idx) => (
-            <StatCard key={idx} {...card} />
-          ))}
-        </div>
+        {isLoading ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="rounded-3xl bg-muted/50 p-4 text-center">
+              <span className="text-muted-foreground animate-pulse text-lg">Carregando...</span>
+            </div>
+          </div>
+        ) : stats ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <StatCard
+              title="Usuários ativos"
+              value={stats.totalRequests.toLocaleString()}
+              change="+8%"
+              trend="up"
+              Icon={User}
+              color="text-primary"
+            />
+            <StatCard
+              title="Receita mensal"
+              value={stats.estimatedCostSavings.toLocaleString('pt-BR', {
+                style: 'currency',
+                currency: 'BRL',
+              })}
+              change="+12%"
+              trend="up"
+              Icon={CreditCard}
+              color="text-primary"
+            />
+            <StatCard
+              title="Sessões hoje"
+              value={stats.totalRequests.toLocaleString()}
+              change="-3%"
+              trend="down"
+              Icon={Activity}
+              color="text-destructive"
+            />
+            <StatCard
+              title="Taxa de erro"
+              value={`${(stats.successRate * 100).toFixed(1)}%`}
+              change="-15%"
+              trend="down"
+              Icon={ShieldCheck}
+              color="text-success"
+            />
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="rounded-3xl bg-muted/50 p-4 text-center">
+              <span className="text-muted-foreground">Erro ao carregar</span>
+            </div>
+          </div>
+        )}
 
         <Separator />
 
@@ -370,9 +404,15 @@ export default function DashboardPage() {
             <TabsContent value="overview" className="mt-4 space-y-6">
               {/* Quick Actions */}
               <section className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-                {QUICK_ACTIONS.map((action) => (
-                  <QuickAction key={action.label} {...action} />
-                ))}
+                {isLoading ? (
+                  <div className="col-span-1 rounded-xl bg-muted/50 p-3 text-center animate-pulse">
+                    <span className="text-xs text-muted-foreground">Carregando...</span>
+                  </div>
+                ) : (
+                  QUICK_ACTIONS.map((action) => (
+                    <QuickAction key={action.label} {...action} />
+                  ))
+                )}
               </section>
 
               {/* Recent Activity */}
@@ -384,9 +424,22 @@ export default function DashboardPage() {
                   </Link>
                 </div>
                 <div className="space-y-1 rounded-2xl border border-border bg-card p-1">
-                  {RECENT_ACTIVITY.map((item) => (
-                    <ActivityItem key={item.id} {...item} />
-                  ))}
+                  {isLoading ? (
+                    <p className="p-3 text-xs text-muted-foreground">Carregando atividade...</p>
+                  ) : recentRequests.length > 0 ? (
+                    recentRequests.map((req) => (
+                      <ActivityItem
+                        key={req.id}
+                        user={req.keyLabel ?? 'Anônimo'}
+                        action={req.status === 'success' ? 'Solicitação concluída' : `Falha: ${req.error ?? 'erro desconhecido'}`}
+                        time={req.createdAt ? new Date(req.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : 'agora'}
+                        avatar={(req.clientIp ?? 'AN').slice(0, 2).toUpperCase()}
+                        status={req.status === 'success' ? 'success' : 'warning'}
+                      />
+                    ))
+                  ) : (
+                    <p className="p-3 text-xs text-muted-foreground">Sem atividade recente</p>
+                  )}
                 </div>
               </section>
             </TabsContent>
@@ -405,25 +458,33 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {RECENT_ACTIVITY.map((item) => (
-                        <tr key={item.id} className="hover:bg-muted/30 transition-colors">
-                          <td className="px-4 py-3">
-                            <div className="flex items-center gap-2">
-                              <span className="size-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
-                                {item.avatar}
-                              </span>
-                              <span className="font-medium">{item.user}</span>
-                            </div>
-                          </td>
-                          <td className="px-4 py-3">{item.action}</td>
-                          <td className="px-4 py-3 text-muted-foreground">{item.time}</td>
-                          <td className="px-4 py-3">
-                            <Badge variant={item.status === 'success' ? 'default' : item.status === 'info' ? 'secondary' : 'outline'}>
-                              {item.status === 'success' ? 'Concluído' : item.status === 'info' ? 'Processando' : 'Pendente'}
-                            </Badge>
-                          </td>
-                        </tr>
-                      ))}
+                      {isLoading ? (
+                        <p className="p-3 text-xs text-muted-foreground">Carregando logs...</p>
+                      ) : recentRequests.length > 0 ? (
+                        recentRequests.map((req) => (
+                          <tr key={req.id} className="hover:bg-muted/30 transition-colors">
+                            <td className="px-4 py-3">
+                              <div className="flex items-center gap-2">
+                                <span className="size-6 rounded-full bg-muted flex items-center justify-center text-xs font-medium">
+                                  {(req.clientIp ?? 'AN').slice(0, 2).toUpperCase()}
+                                </span>
+                                <span className="font-medium">{req.keyLabel ?? 'Anônimo'}</span>
+                              </div>
+                            </td>
+                            <td className="px-4 py-3">{req.status === 'success' ? 'Solicitação concluída' : 'Falha'}</td>
+                            <td className="px-4 py-3 text-muted-foreground">
+                              {new Date(req.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                            </td>
+                            <td className="px-4 py-3">
+                              <Badge variant={req.status === 'success' ? 'default' : 'outline'}>
+                                {req.status === 'success' ? 'Concluído' : 'Erro'}
+                              </Badge>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <p className="p-3 text-xs text-muted-foreground">Sem logs de atividade</p>
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -433,44 +494,151 @@ export default function DashboardPage() {
             <TabsContent value="performance" className="mt-4 space-y-6">
               <section>
                 <h2 className="text-sm font-semibold mb-4">Métricas de performance</h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                  <Card className="rounded-3xl">
-                    <CardHeader>
-                      <CardTitle>Tempo de resposta</CardTitle>
-                      <CardDescription>Média dos últimos 30 dias</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-bold tabular-nums">142</span>
-                        <span className="text-muted-foreground text-sm">ms</span>
-                      </div>
-                      <div className="mt-4 h-24 w-full">
-                        {/* Simple bar representation */}
-                        <div className="flex h-full gap-1">
-                          {[65, 80, 72, 90, 85, 142, 110].map((h, i) => (
-                            <div key={i} className="flex-1 bg-primary rounded-t-sm" style={{ height: `${(h / 142) * 100}%` }} />
-                          ))}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                  <Card className="rounded-3xl">
-                    <CardHeader>
-                      <CardTitle>Uptime</CardTitle>
-                      <CardDescription>Disponibilidade do serviço</CardDescription>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-3xl font-bold tabular-nums">99.9</span>
-                        <span className="text-muted-foreground text-sm">%</span>
-                      </div>
-                      <div className="mt-4 flex items-center gap-2 text-sm">
-                        <div className="size-2 rounded-full bg-success" />
-                        <span className="text-success font-medium">Sistemas operacionais</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                {isLoading ? (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div className="rounded-3xl bg-muted/50 p-6 text-center animate-pulse">
+                      <span className="text-muted-foreground">Carregando...</span>
+                    </div>
+                    <div className="rounded-3xl bg-muted/50 p-6 text-center animate-pulse">
+                      <span className="text-muted-foreground">Carregando...</span>
+                    </div>
+                    <div className="rounded-3xl bg-muted/50 p-6 text-center animate-pulse">
+                      <span className="text-muted-foreground">Carregando...</span>
+                    </div>
+                  </div>
+                ) : stats ? (
+                  <>
+                    {/* Summary Cards */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                      <Card className="rounded-3xl">
+                        <CardHeader>
+                          <CardTitle>Tempo de resposta médio</CardTitle>
+                          <CardDescription>Latência média das requisições</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-bold tabular-nums text-primary">
+                              {stats.avgLatencyMs}
+                            </span>
+                            <span className="text-muted-foreground text-sm">ms</span>
+                          </div>
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            P50: {stats.p50LatencyMs ?? 'N/A'}ms • P95: {stats.p95LatencyMs ?? 'N/A'}ms
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="rounded-3xl">
+                        <CardHeader>
+                          <CardTitle>Taxa de sucesso</CardTitle>
+                          <CardDescription>Requisições bem-sucedidas</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-bold tabular-nums text-success">
+                              {(stats.successRate * 100).toFixed(1)}
+                            </span>
+                            <span className="text-muted-foreground text-sm">%</span>
+                          </div>
+                          <div className="mt-2 text-xs text-muted-foreground">
+                            {stats.totalRequests.toLocaleString()} requisições no período
+                          </div>
+                        </CardContent>
+                      </Card>
+                      <Card className="rounded-3xl">
+                        <CardHeader>
+                          <CardTitle>TTFB médio</CardTitle>
+                          <CardDescription>Time to First Byte</CardDescription>
+                        </CardHeader>
+                        <CardContent className="pt-0">
+                          <div className="flex items-baseline gap-1">
+                            <span className="text-3xl font-bold tabular-nums text-secondary">
+                              {stats.avgTtfbMs ?? 'N/A'}
+                            </span>
+                            <span className="text-muted-foreground text-sm">ms</span>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+
+                    {/* Timeline Chart */}
+                    <section>
+                      <h3 className="text-sm font-semibold mb-3">Volume de requisições ao longo do tempo</h3>
+                      <Card className="rounded-3xl">
+                        <CardContent className="pt-0 pb-4">
+                          <div className="h-48 w-full flex items-end gap-1 px-2">
+                            {timeline.length > 0 ? (
+                              timeline.slice(-24).map((item, i) => (
+                                <div
+                                  key={i}
+                                  className="flex-1 bg-primary/60 rounded-t-sm transition-all hover:bg-primary hover:scale-105"
+                                  style={{ height: `${Math.max((item.requests / Math.max(...timeline.slice(-24).map(t => t.requests), 1)) * 100, 4)}%` }}
+                                  title={`${new Date(item.timestamp).toLocaleDateString('pt-BR')}: ${item.requests} req`}
+                                />
+                              ))
+                            ) : (
+                              <span className="text-muted-foreground text-sm">Sem dados de timeline</span>
+                            )}
+                          </div>
+                          <div className="flex justify-between px-2 text-xs text-muted-foreground mt-2">
+                            {timeline.length > 0 && (
+                              <>
+                                <span>{new Date(timeline[0].timestamp).toLocaleDateString('pt-BR')}</span>
+                                <span>{new Date(timeline[timeline.length - 1].timestamp).toLocaleDateString('pt-BR')}</span>
+                              </>
+                            )}
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </section>
+
+                    {/* By Platform */}
+                    <section>
+                      <h3 className="text-sm font-semibold mb-3">Performance por plataforma</h3>
+                      <Card className="rounded-3xl">
+                        <CardContent className="pt-0">
+                          <div className="overflow-x-auto">
+                            <table className="w-full text-sm">
+                              <thead>
+                                <tr className="border-b border-border bg-muted/50 text-left text-xs text-muted-foreground">
+                                  <th className="px-4 py-3">Plataforma</th>
+                                  <th className="px-4 py-3 text-right">Requisições</th>
+                                  <th className="px-4 py-3 text-right">Taxa sucesso</th>
+                                  <th className="px-4 py-3 text-right">Latência média</th>
+                                  <th className="px-4 py-3 text-right">P95 Latência</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-border">
+                                {byPlatform.length > 0 ? (
+                                  byPlatform.map((platform) => (
+                                    <tr key={`${platform.platform}-${platform.providerId}`} className="hover:bg-muted/30 transition-colors">
+                                      <td className="px-4 py-3 font-medium">{platform.platform} ({platform.providerId})</td>
+                                      <td className="px-4 py-3 text-right tabular-nums">{platform.requests.toLocaleString()}</td>
+                                      <td className="px-4 py-3 text-right">
+                                        <span className={cn('font-medium', platform.successRate >= 0.95 ? 'text-success' : platform.successRate >= 0.8 ? 'text-warning' : 'text-destructive')}>
+                                          {(platform.successRate * 100).toFixed(1)}%
+                                        </span>
+                                      </td>
+                                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{platform.avgLatencyMs}ms</td>
+                                      <td className="px-4 py-3 text-right tabular-nums text-muted-foreground">{platform.p95LatencyMs ?? 'N/A'}ms</td>
+                                    </tr>
+                                  ))
+                                ) : (
+                                  <tr>
+                                    <td className="px-4 py-3 text-center text-muted-foreground" colSpan={5}>Sem dados de plataforma</td>
+                                  </tr>
+                                )}
+                              </tbody>
+                            </table>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </section>
+                  </>
+                ) : (
+                  <div className="rounded-3xl bg-muted/50 p-6 text-center">
+                    <span className="text-muted-foreground">Erro ao carregar métricas</span>
+                  </div>
+                )}
               </section>
             </TabsContent>
 
