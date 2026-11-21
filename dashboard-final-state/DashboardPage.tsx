@@ -185,10 +185,12 @@ export default function DashboardPage() {
   const [timeline, setTimeline] = useState<TimelineItem[]>([])
   const [byPlatform, setByPlatform] = useState<ByPlatformItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     async function loadData() {
       setIsLoading(true)
+      setError(null)
       try {
         const [summary, requests, timelineData, platformData] = await Promise.all([
           getAnalyticsSummary(timeRange),
@@ -200,8 +202,10 @@ export default function DashboardPage() {
         setRecentRequests(requests.rows)
         setTimeline(timelineData)
         setByPlatform(platformData)
-      } catch (error) {
-        console.error('Failed to load dashboard data:', error)
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Erro ao carregar dados'
+        console.error('Failed to load dashboard data:', err)
+        setError(message)
       } finally {
         setIsLoading(false)
       }
@@ -335,6 +339,13 @@ export default function DashboardPage() {
               <span className="text-muted-foreground animate-pulse text-lg">Carregando...</span>
             </div>
           </div>
+        ) : error ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+            <div className="col-span-full rounded-3xl bg-destructive/10 border border-destructive/20 p-4 text-center">
+              <p className="text-sm font-medium text-destructive">Erro ao carregar dados</p>
+              <p className="text-xs text-muted-foreground mt-1">{error}</p>
+            </div>
+          </div>
         ) : stats ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             <StatCard
@@ -365,18 +376,18 @@ export default function DashboardPage() {
               color="text-destructive"
             />
             <StatCard
-              title="Taxa de erro"
+              title="Taxa de sucesso"
               value={`${(stats.successRate * 100).toFixed(1)}%`}
-              change="-15%"
-              trend="down"
+              change="+8%"
+              trend="up"
               Icon={ShieldCheck}
               color="text-success"
             />
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <div className="rounded-3xl bg-muted/50 p-4 text-center">
-              <span className="text-muted-foreground">Erro ao carregar</span>
+            <div className="col-span-full rounded-3xl bg-destructive/10 border border-destructive/20 p-4 text-center">
+              <p className="text-sm font-medium text-destructive">Erro ao carregar</p>
             </div>
           </div>
         )}

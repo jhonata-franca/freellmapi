@@ -1,7 +1,7 @@
 // API service for dashboard data
 // Uses Vite proxy to /api routes on the server
 
-const API_BASE = '/api';
+const API_BASE = import.meta.env.VITE_API_URL ?? '/api';
 
 async function fetchJson<T>(path: string, options?: RequestInit): Promise<T> {
   const response = await fetch(`${API_BASE}${path}`, {
@@ -92,6 +92,8 @@ export interface RecentError {
   error: string;
   latencyMs: number | null;
   createdAt: string;
+  keyLabel: string | null;
+  attemptCount: number;
 }
 
 export interface RecentRequest {
