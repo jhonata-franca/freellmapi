@@ -32,6 +32,7 @@ import { ThemeProvider } from '@/theme'
 import KeysPage from '@/pages/KeysPage'
 import PlaygroundPage from '@/pages/PlaygroundPage'
 import FallbackPage from '@/pages/FallbackPage'
+import DashboardPage from '@/pages/DashboardPage'
 import ModelDetailPage from '@/pages/ModelDetailPage'
 import FusionPage from '@/pages/FusionPage'
 import EmbeddingsPage from '@/pages/EmbeddingsPage'
@@ -496,6 +497,7 @@ function App() {
                       <Route path="/playground" element={<PlaygroundPage />} />
                       <Route path="/keys" element={<KeysPage />} />
                       <Route path="/agents" element={<AgentsPage />} />
+                      <Route path="/dashboard" element={<DashboardPage />} />
                       <Route path="/fallback" element={<Navigate to="/models/chat" replace />} />
                       <Route path="/analytics" element={<AnalyticsPage />} />
                       <Route path="/logs" element={<LogsPage />} />
