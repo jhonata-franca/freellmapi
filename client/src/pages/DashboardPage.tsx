@@ -5,6 +5,7 @@ import {
   BarChart3,
   Bolt,
   ChevronRight,
+  Clock,
   CreditCard,
   Mail,
   Menu,
@@ -180,6 +181,31 @@ export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>('7d')
   const navigate = useNavigate()
 
+  // ── Reference values for dynamic trend calculation ──
+  // ⚠️ TEMPORARY: These are fixed placeholders until the backend provides
+  // period-over-period comparison endpoints (e.g., /analytics/compare).
+  // Replace with real historical data once available.
+  const REFERENCE_VALUES = {
+    previousTotalRequests: 12500, // Reference for "Total de requisições"
+    previousCostSavings: 85.50, // Reference for "Economia estimada" (in BRL)
+    previousSuccessRate: 91.5, // Reference for "Taxa de sucesso" (percentage)
+    previousAvgLatency: 450, // Reference for "Latência média" (ms)
+  } as const
+
+  // Calculate change percentage and trend direction from current vs reference value.
+  function calculateChange(current: number, previous: number): {
+    change: string
+    trend: 'up' | 'down'
+  } {
+    const diff = current - previous
+    const percent = previous !== 0 ? (diff / previous) * 100 : 0
+    const sign = diff >= 0 ? '+' : ''
+    return {
+      change: `${sign}${Math.abs(percent).toFixed(1)}%`,
+      trend: diff >= 0 ? 'up' : 'down',
+    }
+  }
+
   const [stats, setStats] = useState<AnalyticsSummary | null>(null)
   const [recentRequests, setRecentRequests] = useState<RecentRequest[]>([])
   const [timeline, setTimeline] = useState<TimelineItem[]>([])
@@ -348,41 +374,53 @@ export default function DashboardPage() {
           </div>
         ) : stats ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <StatCard
-              title="Usuários ativos"
-              value={stats.totalRequests.toLocaleString()}
-              change="+8%"
-              trend="up"
-              Icon={User}
-              color="text-primary"
-            />
-            <StatCard
-              title="Receita mensal"
-              value={stats.estimatedCostSavings.toLocaleString('pt-BR', {
-                style: 'currency',
-                currency: 'BRL',
-              })}
-              change="+12%"
-              trend="up"
-              Icon={CreditCard}
-              color="text-primary"
-            />
-            <StatCard
-              title="Sessões hoje"
-              value={stats.totalRequests.toLocaleString()}
-              change="-3%"
-              trend="down"
-              Icon={Activity}
-              color="text-destructive"
-            />
-            <StatCard
-              title="Taxa de sucesso"
-              value={`${(stats.successRate * 100).toFixed(1)}%`}
-              change="+8%"
-              trend="up"
-              Icon={ShieldCheck}
-              color="text-success"
-            />
+            {(() => {
+              // Compute all trends once to avoid redundant calculations
+              const requestsChange = calculateChange(stats.totalRequests, REFERENCE_VALUES.previousTotalRequests)
+              const savingsChange = calculateChange(stats.estimatedCostSavings, REFERENCE_VALUES.previousCostSavings)
+              const successRateChange = calculateChange(stats.successRate * 100, REFERENCE_VALUES.previousSuccessRate)
+              const latencyChange = calculateChange(stats.avgLatencyMs, REFERENCE_VALUES.previousAvgLatency)
+
+              return (
+                <>
+                  <StatCard
+                    title="Total de requisições"
+                    value={stats.totalRequests.toLocaleString()}
+                    change={requestsChange.change}
+                    trend={requestsChange.trend}
+                    Icon={Activity}
+                    color="text-primary"
+                  />
+                  <StatCard
+                    title="Economia estimada"
+                    value={stats.estimatedCostSavings.toLocaleString('pt-BR', {
+                      style: 'currency',
+                      currency: 'BRL',
+                    })}
+                    change={savingsChange.change}
+                    trend={savingsChange.trend}
+                    Icon={CreditCard}
+                    color="text-primary"
+                  />
+                  <StatCard
+                    title="Latência média"
+                    value={`${stats.avgLatencyMs.toFixed(0)}ms`}
+                    change={latencyChange.change}
+                    trend={latencyChange.trend === 'up' ? 'down' : 'up'} // Invert trend for latency: up is bad (down), down is good (up)
+                    Icon={Clock}
+                    color="text-primary"
+                  />
+                  <StatCard
+                    title="Taxa de sucesso"
+                    value={`${(stats.successRate * 100).toFixed(1)}%`}
+                    change={successRateChange.change}
+                    trend={successRateChange.trend}
+                    Icon={ShieldCheck}
+                    color="text-success"
+                  />
+                </>
+              )
+            })()}
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">

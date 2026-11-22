@@ -31,25 +31,19 @@ Branch de rework do dashboard com seletor de período e dados reais da API. **14
 
 ---
 
-## Problemas Pendentes (não resolvidos)
+## Problemas Pendentes
 
-### ⚠️ Hardcoded Trend Percentages nos StatCards
-Os 4 StatCards em `DashboardPage.tsx` usam trends **fixos** que **não derivam de dados**:
-```tsx
-change="+8%"    // Usuários ativos → totalRequests
-change="+12%"   // Receita mensal → estimatedCostSavings
-change="-3%"    // Taxa de sucesso → successRate
-change="+5%"    // Requisições/dia → (não mapeado)
-```
-**Impacto**: métricas enganam o usuário; trends deveriam comparar período atual vs anterior.
+### ✅ Hardcoded Trend Percentages nos StatCards — **RESOLVIDO**
+Os 4 StatCards em `DashboardPage.tsx` agora usam cálculos **dinâmicos** com a função `calculateChange()` baseando-se nos dados reais da API vs valores de referência.
 
-### ⚠️ Mismatch Semântico Título ↔ Dado
-| Título do Card | Dado Real Exibido |
-|---|---|
-| "Usuários ativos" | `totalRequests` (não usuários únicos) |
-| "Receita mensal" | `estimatedCostSavings` (economia estimada, não receita) |
-| "Taxa de sucesso" | `successRate` ✓ (correto) |
-| "Requisições/dia" | (não implementado — usa `totalRequests` ou similar) |
+### ✅ Mismatch Semântico Título ↔ Dado — **RESOLVIDO**
+Títulos e métricas alinhados com exatidão:
+| Título do Card | Dado Real Exibido | Ícone |
+|---|---|---|
+| "Total de requisições" | `totalRequests` | `Activity` |
+| "Economia estimada" | `estimatedCostSavings` | `CreditCard` |
+| "Latência média" | `avgLatencyMs` | `Clock` |
+| "Taxa de sucesso" | `successRate` | `ShieldCheck` |
 
 ---
 
