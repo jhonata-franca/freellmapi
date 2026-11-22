@@ -14,11 +14,6 @@ export default defineConfig(({ mode }) => {
     define: {
       __SERVER_PORT__: JSON.stringify(String(serverPort)),
     },
-    build: {
-      // On Vercel, place the output in the repo-root `dist` so the
-      // static build detector finds it; locally it stays in `client/dist`.
-      outDir: process.env.VERCEL ? path.resolve(__dirname, '..', 'dist') : './dist',
-    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, './src'),
