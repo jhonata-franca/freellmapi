@@ -271,6 +271,171 @@ analyticsRouter.get('/summary', (req: Request, res: Response) => {
   });
 });
 
+/*────────────────────────────────────────────────────────────────────────
+  GET /api/analytics/compare
+  Compare current period vs previous period for dynamic StatCard trends.
+
+  Query params:
+    range      - current period: '7d' | '30d' | '90d' | 'all' (default: '7d')
+    mode       - comparison mode: 'savings' | 'latency' | 'requests' | 'success' (default: 'requests')
+
+  Returns:
+    current: metrics for the selected range
+    previous: metrics for the period immediately before the current one
+    change: calculated { change: string; trend: 'up' | 'down' }
+────────────────────────────────────────────────────────────────────────*/
+analyticsRouter.get('/compare', (req: Request, res: Response) => {
+  const range = (req.query.range as string) ?? '7d';
+  const mode = (req.query.mode as string) ?? 'requests';
+  const db = getDb();
+
+  const since = getSinceTimestamp(range);
+  const now = Date.now();
+
+  // Determine the current period's boundaries and metrics
+  const rangeDurations: Record<string, number> = {
+    '7d': 7 * 24 * 60 * 60 * 1000,
+    '30d': 30 * 24 * 60 * 60 * 1000,
+    '90d': 90 * 24 * 60 * 60 * 1000,
+    'all': Infinity,
+  };
+
+  const duration = rangeDurations[range];
+  const currentSince = duration === Infinity ? ALL_TIME_SINCE : toSqliteDateTime(now - duration);
+
+  // Helper to read aggregate from request_hourly
+  function readCurrentAggregate(sinceDate: string) {
+    const rows = db.prepare(`
+      SELECT
+        COALESCE(SUM(total_requests), 0) as total_requests,
+        COALESCE(SUM(success_count), 0) as success_count,
+        COALESCE(SUM(error_count), 0) as error_count,
+        COALESCE(SUM(input_tokens), 0) as total_input_tokens,
+        COALESCE(SUM(output_tokens), 0) as total_output_tokens,
+        MIN(hour) as first_request_at
+      FROM request_hourly
+      WHERE hour >= ?
+    `).get(sinceDate) as {
+      total_requests: number;
+      success_count: number;
+      error_count: number;
+      total_input_tokens: number;
+      total_output_tokens: number;
+      first_request_at: string | null;
+    };
+    return rows;
+  }
+
+  // Helper to read raw-row aggregates for latency and savings
+  function readRawAggregates(sinceDate: string) {
+    const latencyRow = db.prepare(`
+      SELECT AVG(latency_ms) as avg_latency_ms FROM requests WHERE created_at >= ?
+    `).get(sinceDate) as { avg_latency_ms: number | null } | undefined;
+
+    const savings = db.prepare(`
+      SELECT COALESCE(SUM(
+        CASE WHEN r.status = 'success' THEN
+          r.input_tokens  * COALESCE(m.paid_input_per_m,  ?) / 1000000.0 +
+          r.output_tokens * COALESCE(m.paid_output_per_m, ?) / 1000000.0
+        ELSE 0 END
+      ), 0) as est_savings
+      FROM requests r
+      LEFT JOIN models m ON m.platform = r.platform AND m.model_id = r.model_id
+      WHERE r.created_at >= ?
+    `).get(FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M, sinceDate) as { est_savings: number };
+
+    const typeRows = db.prepare(`
+      SELECT request_type, COUNT(*) as count FROM requests
+      WHERE created_at >= ?
+      GROUP BY request_type
+    `).all(sinceDate) as Array<{ request_type: string; count: number }>;
+
+    const requestTypeCounts = { chat: 0, embedding: 0 };
+    for (const row of typeRows) {
+      if (row.request_type === 'embedding') requestTypeCounts.embedding = row.count;
+      else if (row.request_type === 'chat') requestTypeCounts.chat = row.count;
+    }
+
+    const latencyRaw = latencyRow?.avg_latency_ms ?? 0;
+
+    return {
+      avgLatencyMs: Math.round(latencyRaw),
+      estimatedCostSavings: Math.round((savings.est_savings ?? 0) * 100) / 100,
+      requestTypeCounts,
+    };
+  }
+
+  // Read current period data
+  const currentAgg = readCurrentAggregate(currentSince);
+  const currentRaw = readRawAggregates(currentSince);
+
+  // Determine previous period boundaries
+  // Previous period has the same duration, immediately before the current one
+  const prevEndMs = now - (duration ?? 0);
+  const prevStartMs = prevEndMs - duration;
+  const prevSince = toSqliteDateTime(prevStartMs);
+
+  const prevAgg = readCurrentAggregate(prevSince);
+  const prevRaw = readRawAggregates(prevSince);
+
+  // Calculate change based on mode
+  function calculateChange(current: number, previous: number): { change: string; trend: 'up' | 'down' | 'neutral' } {
+    if (previous === 0) {
+      return { change: '0.0%', trend: 'neutral' };
+    }
+    const diff = current - previous;
+    const percent = Math.abs((diff / previous) * 100);
+    const sign = diff >= 0 ? '+' : '';
+    const trend = diff >= 0 ? 'up' : 'down';
+    return {
+      change: `${sign}${percent.toFixed(1)}%`,
+      trend,
+    };
+  }
+
+  // Mode-specific metric extraction
+  let currentVal: number, prevVal: number;
+
+  switch (mode) {
+    case 'savings':
+      currentVal = currentRaw.estimatedCostSavings;
+      prevVal = prevRaw.estimatedCostSavings;
+      break;
+    case 'latency':
+      currentVal = currentRaw.avgLatencyMs;
+      prevVal = prevRaw.avgLatencyMs;
+      break;
+    case 'success':
+      currentVal = currentAgg.success_count ?? 0;
+      prevVal = prevAgg.success_count ?? 0;
+      break;
+    case 'requests':
+    default:
+      currentVal = currentAgg.total_requests;
+      prevVal = prevAgg.total_requests;
+      break;
+  }
+
+  const { change, trend } = calculateChange(currentVal, prevVal);
+
+  res.json({
+    current: {
+      range,
+      mode,
+      [mode === 'success' ? 'successCount' : mode === 'latency' ? 'avgLatencyMs' : 'estimatedCostSavings']: currentVal,
+      totalRequests: currentAgg.total_requests,
+    },
+    previous: {
+      range,
+      mode,
+      [mode === 'success' ? 'successCount' : mode === 'latency' ? 'avgLatencyMs' : 'estimatedCostSavings']: prevVal,
+      totalRequests: prevAgg.total_requests,
+    },
+    change,
+    trend,
+  });
+});
+
 // Stats grouped by model.
 //
 // The grouping key is (platform, endpoint, model_id), not (platform, model_id):

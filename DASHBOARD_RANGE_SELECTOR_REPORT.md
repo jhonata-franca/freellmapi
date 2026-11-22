@@ -34,7 +34,7 @@ Branch de rework do dashboard com seletor de período e dados reais da API. **14
 ## Problemas Pendentes
 
 ### ✅ Hardcoded Trend Percentages nos StatCards — **RESOLVIDO**
-Os 4 StatCards em `DashboardPage.tsx` agora usam cálculos **dinâmicos** com a função `calculateChange()` baseando-se nos dados reais da API vs valores de referência.
+Os 4 StatCards em `DashboardPage.tsx` agora usam cálculos **dinâmicos** com a função `calculateChange()` baseando-se nos dados reais da API vs valores de referência. O cálculo agora é alimentado por dados reais do endpoint `/api/analytics/compare`.
 
 ### ✅ Mismatch Semântico Título ↔ Dado — **RESOLVIDO**
 Títulos e métricas alinhados com exatidão:
@@ -44,6 +44,14 @@ Títulos e métricas alinhados com exatidão:
 | "Economia estimada" | `estimatedCostSavings` | `CreditCard` |
 | "Latência média" | `avgLatencyMs` | `Clock` |
 | "Taxa de sucesso" | `successRate` | `ShieldCheck` |
+
+### 🆕 Novo Endpoint `/api/analytics/compare` — **IMPLEMENTADO**
+Nova rota que fornece dados de comparação período-atual vs período-anterior para cálculo dinâmico de trends nos StatCards. Modos disponíveis: `requests`, `success`, `latency`, `savings`.
+
+- **Query params**: `range` (padrão: `7d`), `mode` (padrão: `requests`)
+- **Retorna**: `current` (métricas do período selecionado), `previous` (métricas do período imediatamente anterior), `change` (formatted string tipo "+12.5%" ou "-3.2%"), `trend` (`up`/`down`/`neutral`)
+
+Esta substitui a necessidade dos `REFERENCE_VALUES` hardcoded no `DashboardPage.tsx`, permitindo que os trends sejam calculados a partir de dados históricos reais da base de dados.
 
 ---
 
@@ -105,7 +113,8 @@ MOCK_API=1 npm run dev
 
 ## Próximos Passos Recomendados
 
-1. **Corrigir trends hardcoded** → calcular delta real (período atual vs anterior)
-2. **Alinhar títulos dos cards** aos dados reais ou renomear métricas
+1. ✅ **Corrigir trends hardcoded** → calcular delta real (período atual vs anterior) — **CONCLUÍDO** via `/api/analytics/compare`
+2. ✅ **Alinhar títulos dos cards** aos dados reais ou renomear métricas — **CONCLUÍDO**
 3. **Implementar `/reports`** se "Novo relatório" for feature desejada
 4. **Remover `dashboard-final-state/`** se for apenas referência temporária
+5. **Atualizar `DashboardPage.tsx`** para usar `/api/analytics/compare` em vez de `REFERENCE_VALUES` hardcoded
