@@ -1,8 +1,8 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "installCommand": "npm install --workspaces --if-present",
-  "buildCommand": "npm run build -w client",
-  "outputDirectory": "client/dist",
+  "buildCommand": "npm run build -w client && cp -r client/dist dist",
+  "outputDirectory": "dist",
   "env": {
     "VITE_API_URL": "@api_base_url"
   },
