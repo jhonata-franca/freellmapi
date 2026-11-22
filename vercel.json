@@ -3,7 +3,7 @@
   "framework": "vite",
   "installCommand": "npm install --workspaces --if-present",
   "buildCommand": "npm run build -w client",
-  "outputDirectory": "client/dist",
+  "outputDirectory": "./client/dist",
   "env": {
     "VITE_API_URL": "@api_base_url"
   },
