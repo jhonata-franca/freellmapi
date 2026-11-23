@@ -124,21 +124,24 @@ export interface SearchAnalytics {
 
 export type CompareMode = 'savings' | 'latency' | 'requests' | 'success';
 
-export interface ComparePeriod {
-  range: string;
-  mode: string;
-  totalRequests: number;
-  estimatedCostSavings: number;
-  avgLatencyMs: number;
-  successCount: number;
-  successRate: number;
-}
-
+// Flat per-metric compare result returned by /api/analytics/compare.
+// current/previous are the metric values themselves (e.g. total requests, success rate),
+// not nested objects — one call per metric mode.
 export interface CompareResult {
-  current: ComparePeriod;
-  previous: ComparePeriod;
+  current: number;
+  previous: number;
   change: string;
   trend: 'up' | 'down' | 'neutral';
+  context?: {
+    currentTotalRequests: number;
+    previousTotalRequests: number;
+    currentEstimatedCostSavings: number;
+    previousEstimatedCostSavings: number;
+    currentAvgLatencyMs: number;
+    previousAvgLatencyMs: number;
+    currentSuccessCount: number;
+    previousSuccessCount: number;
+  };
 }
 
 // Dashboard API functions

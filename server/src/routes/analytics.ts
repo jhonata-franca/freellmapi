@@ -287,6 +287,11 @@ analyticsRouter.get('/summary', (req: Request, res: Response) => {
 analyticsRouter.get('/compare', (req: Request, res: Response) => {
   const range = (req.query.range as string) ?? '7d';
   const mode = (req.query.mode as string) ?? 'requests';
+  const VALID_MODES: readonly string[] = ['savings', 'latency', 'requests', 'success'];
+  if (!VALID_MODES.includes(mode)) {
+    res.status(400).json({ error: `invalid mode '${mode}' (expected one of ${VALID_MODES.join(', ')})` });
+    return;
+  }
   const db = getDb();
 
   const since = getSinceTimestamp(range);
@@ -370,10 +375,13 @@ analyticsRouter.get('/compare', (req: Request, res: Response) => {
   const currentRaw = readRawAggregates(currentSince);
 
   // Determine previous period boundaries
-  // Previous period has the same duration, immediately before the current one
-  const prevEndMs = now - (duration ?? 0);
-  const prevStartMs = prevEndMs - duration;
-  const prevSince = toSqliteDateTime(prevStartMs);
+  // Previous period has the same duration, immediately before the current one.
+  // `range=all` maps to ALL_TIME_SINCE (no valid previous period), so there is
+  // nothing to compare — the current-period metrics are already lifetime totals.
+  const prevSince =
+    range === 'all' || duration === Infinity
+      ? ALL_TIME_SINCE
+      : toSqliteDateTime(now - duration - (duration ?? 0));
 
   const prevAgg = readCurrentAggregate(prevSince);
   const prevRaw = readRawAggregates(prevSince);
@@ -385,7 +393,7 @@ analyticsRouter.get('/compare', (req: Request, res: Response) => {
     }
     const diff = current - previous;
     const percent = Math.abs((diff / previous) * 100);
-    const sign = diff >= 0 ? '+' : '';
+    const sign = diff >= 0 ? '+' : '-';
     const trend = diff >= 0 ? 'up' : 'down';
     return {
       change: `${sign}${percent.toFixed(1)}%`,
@@ -406,8 +414,11 @@ analyticsRouter.get('/compare', (req: Request, res: Response) => {
       prevVal = prevRaw.avgLatencyMs;
       break;
     case 'success':
-      currentVal = currentAgg.success_count ?? 0;
-      prevVal = prevAgg.success_count ?? 0;
+      // Compute success rate (0-1) for each period
+      const currentSuccessRate = (currentAgg.success_count ?? 0) / ((currentAgg.success_count ?? 0) + (currentAgg.error_count ?? 0));
+      const prevSuccessRate = (prevAgg.success_count ?? 0) / ((prevAgg.success_count ?? 0) + (prevAgg.error_count ?? 0));
+      currentVal = currentSuccessRate;
+      prevVal = prevSuccessRate;
       break;
     case 'requests':
     default:
@@ -419,20 +430,24 @@ analyticsRouter.get('/compare', (req: Request, res: Response) => {
   const { change, trend } = calculateChange(currentVal, prevVal);
 
   res.json({
-    current: {
-      range,
-      mode,
-      [mode === 'success' ? 'successCount' : mode === 'latency' ? 'avgLatencyMs' : 'estimatedCostSavings']: currentVal,
-      totalRequests: currentAgg.total_requests,
-    },
-    previous: {
-      range,
-      mode,
-      [mode === 'success' ? 'successCount' : mode === 'latency' ? 'avgLatencyMs' : 'estimatedCostSavings']: prevVal,
-      totalRequests: prevAgg.total_requests,
-    },
+    current: currentVal,
+    previous: prevVal,
     change,
     trend,
+    // Context for the caller: what range/mode produced these numbers and the
+    // raw totals each period was measured over (useful for tooltips).
+    context: {
+      range,
+      mode,
+      currentTotalRequests: currentAgg.total_requests,
+      previousTotalRequests: prevAgg.total_requests,
+      currentEstimatedCostSavings: currentRaw.estimatedCostSavings,
+      previousEstimatedCostSavings: prevRaw.estimatedCostSavings,
+      currentAvgLatencyMs: currentRaw.avgLatencyMs,
+      previousAvgLatencyMs: prevRaw.avgLatencyMs,
+      currentSuccessCount: currentAgg.success_count,
+      previousSuccessCount: prevAgg.success_count,
+    },
   });
 });
 

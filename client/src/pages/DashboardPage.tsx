@@ -14,19 +14,23 @@ import {
   Send,
   Settings,
   ShieldCheck,
+  TrendingDown,
   TrendingUp,
   User,
   X,
+  Minus,
 } from 'lucide-react'
 import {
   getAnalyticsSummary,
   getRecentRequests,
   getTimeline,
   getByPlatform,
+  getAnalyticsCompare,
   type AnalyticsSummary,
   type RecentRequest,
   type TimelineItem,
   type ByPlatformItem,
+  type CompareResult,
 } from '@/services/api'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
@@ -83,11 +87,12 @@ function StatCard({
   title: string
   value: string
   change: string
-  trend: 'up' | 'down'
+  trend: 'up' | 'down' | 'neutral'
   Icon: React.ComponentType<{ className?: string }>
   color: string
 }) {
-  const TrendIcon = trend === 'up' ? TrendingUp : X
+  const TrendIcon = trend === 'up' ? TrendingUp : trend === 'down' ? TrendingDown : Minus
+  const trendColor = trend === 'up' ? 'text-success' : trend === 'down' ? 'text-destructive' : 'text-muted-foreground'
   return (
     <Card className="rounded-3xl border border-border/50">
       <CardHeader className="px-4 py-3">
@@ -104,7 +109,7 @@ function StatCard({
       <CardContent className="px-4 py-2">
         <div className="flex items-baseline gap-1">
           <span className="text-2xl font-bold tabular-nums">{value}</span>
-          <span className={cn('text-xs font-medium', trend === 'up' ? 'text-success' : 'text-destructive')}>
+          <span className={cn('text-xs font-medium', trendColor)}>
             <TrendIcon className="size-3" /> {change}
           </span>
         </div>
@@ -181,35 +186,17 @@ export default function DashboardPage() {
   const [timeRange, setTimeRange] = useState<TimeRange>('7d')
   const navigate = useNavigate()
 
-  // ── Reference values for dynamic trend calculation ──
-  // ⚠️ TEMPORARY: These are fixed placeholders until the backend provides
-  // period-over-period comparison endpoints (e.g., /analytics/compare).
-  // Replace with real historical data once available.
-  const REFERENCE_VALUES = {
-    previousTotalRequests: 12500, // Reference for "Total de requisições"
-    previousCostSavings: 85.50, // Reference for "Economia estimada" (in BRL)
-    previousSuccessRate: 91.5, // Reference for "Taxa de sucesso" (percentage)
-    previousAvgLatency: 450, // Reference for "Latência média" (ms)
-  } as const
-
-  // Calculate change percentage and trend direction from current vs reference value.
-  function calculateChange(current: number, previous: number): {
-    change: string
-    trend: 'up' | 'down'
-  } {
-    const diff = current - previous
-    const percent = previous !== 0 ? (diff / previous) * 100 : 0
-    const sign = diff >= 0 ? '+' : ''
-    return {
-      change: `${sign}${Math.abs(percent).toFixed(1)}%`,
-      trend: diff >= 0 ? 'up' : 'down',
-    }
-  }
-
+  
   const [stats, setStats] = useState<AnalyticsSummary | null>(null)
   const [recentRequests, setRecentRequests] = useState<RecentRequest[]>([])
   const [timeline, setTimeline] = useState<TimelineItem[]>([])
   const [byPlatform, setByPlatform] = useState<ByPlatformItem[]>([])
+  const [compareData, setCompareData] = useState<{
+    requests: CompareResult | null
+    savings: CompareResult | null
+    success: CompareResult | null
+    latency: CompareResult | null
+  } | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
@@ -218,16 +205,26 @@ export default function DashboardPage() {
       setIsLoading(true)
       setError(null)
       try {
-        const [summary, requests, timelineData, platformData] = await Promise.all([
+        const [summary, requests, timelineData, platformData, compareRequests, compareSavings, compareSuccess, compareLatency] = await Promise.all([
           getAnalyticsSummary(timeRange),
           getRecentRequests(timeRange, 5),
           getTimeline(timeRange, timeRange === '7d' ? 'hour' : 'day'),
           getByPlatform(timeRange),
+          getAnalyticsCompare(timeRange, 'requests'),
+          getAnalyticsCompare(timeRange, 'savings'),
+          getAnalyticsCompare(timeRange, 'success'),
+          getAnalyticsCompare(timeRange, 'latency'),
         ])
         setStats(summary)
         setRecentRequests(requests.rows)
         setTimeline(timelineData)
         setByPlatform(platformData)
+        setCompareData({
+          requests: compareRequests,
+          savings: compareSavings,
+          success: compareSuccess,
+          latency: compareLatency,
+        })
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Erro ao carregar dados'
         console.error('Failed to load dashboard data:', err)
@@ -375,11 +372,20 @@ export default function DashboardPage() {
         ) : stats ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {(() => {
-              // Compute all trends once to avoid redundant calculations
-              const requestsChange = calculateChange(stats.totalRequests, REFERENCE_VALUES.previousTotalRequests)
-              const savingsChange = calculateChange(stats.estimatedCostSavings, REFERENCE_VALUES.previousCostSavings)
-              const successRateChange = calculateChange(stats.successRate * 100, REFERENCE_VALUES.previousSuccessRate)
-              const latencyChange = calculateChange(stats.avgLatencyMs, REFERENCE_VALUES.previousAvgLatency)
+              // Trends come from the real /api/analytics/compare endpoint
+              // (period-over-period comparison). Fallback to neutral if the
+              // compare request failed for any reason.
+              const trendFallback = (c: CompareResult | null | undefined) =>
+                c ? { change: c.change, trend: c.trend } : { change: '0.0%', trend: 'neutral' as const }
+
+              const requestsChange = trendFallback(compareData?.requests)
+              const savingsChange = trendFallback(compareData?.savings)
+              const successChange = trendFallback(compareData?.success)
+              const latencyChange = trendFallback(compareData?.latency)
+
+              // For latency: an increase is bad, so invert the visual trend.
+              const latencyTrend =
+                latencyChange.trend === 'up' ? 'down' : latencyChange.trend === 'down' ? 'up' : 'neutral'
 
               return (
                 <>
@@ -406,15 +412,15 @@ export default function DashboardPage() {
                     title="Latência média"
                     value={`${stats.avgLatencyMs.toFixed(0)}ms`}
                     change={latencyChange.change}
-                    trend={latencyChange.trend === 'up' ? 'down' : 'up'} // Invert trend for latency: up is bad (down), down is good (up)
+                    trend={latencyTrend}
                     Icon={Clock}
                     color="text-primary"
                   />
                   <StatCard
                     title="Taxa de sucesso"
                     value={`${(stats.successRate * 100).toFixed(1)}%`}
-                    change={successRateChange.change}
-                    trend={successRateChange.trend}
+                    change={successChange.change}
+                    trend={successChange.trend}
                     Icon={ShieldCheck}
                     color="text-success"
                   />
