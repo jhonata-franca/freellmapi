@@ -122,9 +122,35 @@ export interface SearchAnalytics {
   byProvider: Array<{ provider: string; searches: number; successRate: number; avgLatencyMs: number }>;
 }
 
+export type CompareMode = 'savings' | 'latency' | 'requests' | 'success';
+
+export interface ComparePeriod {
+  range: string;
+  mode: string;
+  totalRequests: number;
+  estimatedCostSavings: number;
+  avgLatencyMs: number;
+  successCount: number;
+  successRate: number;
+}
+
+export interface CompareResult {
+  current: ComparePeriod;
+  previous: ComparePeriod;
+  change: string;
+  trend: 'up' | 'down' | 'neutral';
+}
+
 // Dashboard API functions
 export async function getAnalyticsSummary(range: string = '7d'): Promise<AnalyticsSummary> {
   return fetchJson<AnalyticsSummary>(`/analytics/summary?range=${range}`);
+}
+
+export async function getAnalyticsCompare(
+  range: string = '7d',
+  mode: CompareMode = 'requests',
+): Promise<CompareResult> {
+  return fetchJson<CompareResult>(`/api/analytics/compare?range=${range}&mode=${mode}`);
 }
 
 export async function getByPlatform(range: string = '7d'): Promise<ByPlatformItem[]> {

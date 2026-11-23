@@ -45,11 +45,33 @@ Títulos e métricas alinhados com exatidão:
 | "Latência média" | `avgLatencyMs` | `Clock` |
 | "Taxa de sucesso" | `successRate` | `ShieldCheck` |
 
-### 🆕 Novo Endpoint `/api/analytics/compare` — **IMPLEMENTADO**
-Nova rota que fornece dados de comparação período-atual vs período-anterior para cálculo dinâmico de trends nos StatCards. Modos disponíveis: `requests`, `success`, `latency`, `savings`.
+### 🆕 Novo Endpoint `/api/analytics/compare` — **IMPLEMENTADO** (commit `9555c4fd`)
+Rota `GET /api/analytics/compare` em `server/src/routes/analytics.ts` (linhas 287–437). Fornece comparação período-atual vs período-anterior para cálculo dinâmico de trends nos StatCards.
 
-- **Query params**: `range` (padrão: `7d`), `mode` (padrão: `requests`)
-- **Retorna**: `current` (métricas do período selecionado), `previous` (métricas do período imediatamente anterior), `change` (formatted string tipo "+12.5%" ou "-3.2%"), `trend` (`up`/`down`/`neutral`)
+- **Query params**: `range` (`7d`|`30d`|`90d`|`all`, padrão `7d`), `mode` (`requests`|`success`|`latency`|`savings`, padrão `requests`)
+- **Lógica**: período atual = `since(range)` → agora; período anterior = mesma duração imediatamente antes. Métricas de `request_hourly` (requests/success/error) e da tabela `requests` crua (latência, savings).
+- **Retorno atual** (formato a ser revisado — ver bugs abaixo):
+  ```json
+  {
+    "current":  { "range": "7d", "mode": "requests", "<chave-dinâmica>": <valor>, "totalRequests": N },
+    "previous": { "range": "7d", "mode": "requests", "<chave-dinâmica>": <valor>, "totalRequests": N },
+    "change": "+12.5%",
+    "trend": "up" | "down" | "neutral"
+  }
+  ```
+
+#### ⚠️ Bugs encontrados ao preparar o wiring do cliente (precisam ser corrigidos antes)
+1. **Chave dinâmica incoerente**: para `mode=requests`, a chave computada é `estimatedCostSavings` mas o valor é o total de requisições (só `success`→`successCount`, `latency`→`avgLatencyMs` têm nome correto).
+2. **`mode=success` compara contagem, não taxa**: usa `success_count` absoluto; o card "Taxa de sucesso" exibe taxa (0–1). Deveria comparar `success_count / (success_count + error_count)` por período.
+3. **Sinal negativo perdido**: `calculateChange` usa `sign = diff >= 0 ? '+' : ''` → queda de 12,5% renderiza como `"12.5%"` sem o `-`.
+4. **`range=all` quebra**: `duration = Infinity` → `prevStartMs = -Infinity` → `toSqliteDateTime(-Infinity)` gera data inválida.
+5. **`mode` não validado**: valor desconhecido cai silenciosamente em `default` (requests).
+
+#### ✅ Formato alvo após correção (contrato do cliente)
+```json
+{ "current": 1234, "previous": 1100, "change": "+12.2%", "trend": "up" }
+```
+Flat, tipado em `api.ts` como `CompareResult { current: number; previous: number; change: string; trend: 'up'|'down'|'neutral' }`.
 
 Esta substitui a necessidade dos `REFERENCE_VALUES` hardcoded no `DashboardPage.tsx`, permitindo que os trends sejam calculados a partir de dados históricos reais da base de dados.
 
@@ -113,8 +135,14 @@ MOCK_API=1 npm run dev
 
 ## Próximos Passos Recomendados
 
-1. ✅ **Corrigir trends hardcoded** → calcular delta real (período atual vs anterior) — **CONCLUÍDO** via `/api/analytics/compare`
-2. ✅ **Alinhar títulos dos cards** aos dados reais ou renomear métricas — **CONCLUÍDO**
-3. **Implementar `/reports`** se "Novo relatório" for feature desejada
-4. **Remover `dashboard-final-state/`** se for apenas referência temporária
-5. **Atualizar `DashboardPage.tsx`** para usar `/api/analytics/compare` em vez de `REFERENCE_VALUES` hardcoded
+1. ⚠️ **Wiring DashboardPage ao `/api/analytics/compare`** — Cliente (`DashboardPage.tsx`) ainda usa `REFERENCE_VALUES`/`calculateChange` fixos. Precisa: adicionar `getAnalyticsCompare` no `api.ts`, substituir cálculo por resposta real, ajustar tipos de `trend` para aceitar `'up'|'down'|'neutral'`.
+2. ⚠️ **Corrigir bugs no backend `/compare`** antes do wiring completo:
+   - Chave dinâmica incoerente (key dependente de mode, mas valor não coincide)
+   - `mode=success` compara contagem abs. vs taxa (0–1) que o card exibe
+   - Sinal negativo perdido em `calculateChange` (diff < 0 renderiza sem `-`)
+   - `range=all` quebra (duration Infinity → datas inválidas)
+   - Falta de validação de `mode`
+3. ✅ **Alinhar títulos dos cards** aos dados reais ou renomear métricas — **CONCLUÍDO**
+4. ✅ **Corrigir trends hardcoded** → cálculo delta (via `/compare`) — **CONCLUÍDO** nos commits anteriores (temporário com REFERENCE_VALUES)
+5. **Implementar `/reports`** se "Novo relatório" for feature desejada
+6. **Remover `dashboard-final-state/`** se for apenas referência temporária
