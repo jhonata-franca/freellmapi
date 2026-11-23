@@ -33,6 +33,11 @@ import KeysPage from '@/pages/KeysPage'
 import PlaygroundPage from '@/pages/PlaygroundPage'
 import FallbackPage from '@/pages/FallbackPage'
 import DashboardPage from '@/pages/DashboardPage'
+import ReportsPage from '@/pages/ReportsPage'
+import MessagesPage from '@/pages/MessagesPage'
+import SettingsPage from '@/pages/SettingsPage'
+import SyncPage from '@/pages/SyncPage'
+import ActivityPage from '@/pages/ActivityPage'
 import ModelDetailPage from '@/pages/ModelDetailPage'
 import FusionPage from '@/pages/FusionPage'
 import EmbeddingsPage from '@/pages/EmbeddingsPage'
@@ -48,6 +53,7 @@ import LogsPage from '@/pages/LogsPage'
 import PremiumPage from '@/pages/PremiumPage'
 import NotFoundPage from '@/pages/NotFoundPage'
 import AgentsPage from '@/pages/AgentsPage'
+import ProfilePage from '@/pages/ProfilePage'
 
 // Every failed mutation surfaces as an error toast, so no action fails
 // silently. A page that already shows the failure inline can opt out with
@@ -498,6 +504,12 @@ function App() {
                       <Route path="/keys" element={<KeysPage />} />
                       <Route path="/agents" element={<AgentsPage />} />
                       <Route path="/dashboard" element={<DashboardPage />} />
+                      <Route path="/reports" element={<ReportsPage />} />
+                      <Route path="/messages" element={<MessagesPage />} />
+                      <Route path="/settings" element={<SettingsPage />} />
+                      <Route path="/sync" element={<SyncPage />} />
+                      <Route path="/activity" element={<ActivityPage />} />
+                      <Route path="/profile" element={<ProfilePage />} />
                       <Route path="/fallback" element={<Navigate to="/models/chat" replace />} />
                       <Route path="/analytics" element={<AnalyticsPage />} />
                       <Route path="/logs" element={<LogsPage />} />
