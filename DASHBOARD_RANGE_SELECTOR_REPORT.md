@@ -1,6 +1,7 @@
 # Relatório da Branch `dashboard-range-selector`
 
 ## Visão Geral
+
 Branch de rework do dashboard com seletor de período e dados reais da API. **14 commits à frente de `main`**, com foco em correções de deploy no Vercel e melhorias no dashboard.
 
 ---
@@ -12,10 +13,12 @@ Branch de rework do dashboard com seletor de período e dados reais da API. **14
 | `7de2c233` | Nov 21 | Add dashboard range selector and real API data in Performance tab |
 | `13a55b48` | Nov 21 | **Fix crítico**: health check path, success rate card, error UI |
 | `3f050b8d`–`f79749f9` | Nov 21 | **11 commits de correção Vercel** (monorepo root, workspace deps, tsconfig paths, CORS) |
+| `cf1d575e` | Nov 23 | **docs, client: document analytics compare endpoint and add getAnalyticsCompare client** |
+| `6c6dd538` | Nov 23 | **fix(analytics): fix /compare endpoint bugs; wire DashboardPage to real compare data** |
 
 ---
 
-## Correções Aplicadas (commit `13a55b48`)
+## Correções Aplicadas
 
 ### 1. Bug no `checkHealth()` — **RESOLVIDO**
 - **Problema**: `fetchJson('/health')` + `API_BASE = '/api'` → requeria `/api/api/health` (duplicação)
@@ -31,10 +34,10 @@ Branch de rework do dashboard com seletor de período e dados reais da API. **14
 
 ---
 
-## Problemas Pendentes
+## Problemas Pendentes ✅ RESOLVIDOS
 
-### ✅ Hardcoded Trend Percentages nos StatCards — **RESOLVIDO**
-Os 4 StatCards em `DashboardPage.tsx` agora usam cálculos **dinâmicos** com a função `calculateChange()` baseando-se nos dados reais da API vs valores de referência. O cálculo agora é alimentado por dados reais do endpoint `/api/analytics/compare`.
+### ✅ Tendências hardcoded nos StatCards — **RESOLVIDO** (13/11 → 23/11)
+Os 4 StatCards em `DashboardPage.tsx` agora usam cálculo dinâmico via `getAnalyticsCompare()` ao invés de `REFERENCE_VALUES` fixos. Tendências são obtidas do endpoint `/api/analytics/compare` (período atual vs anterior), alimentados por dados reais da base de dados.
 
 ### ✅ Mismatch Semântico Título ↔ Dado — **RESOLVIDO**
 Títulos e métricas alinhados com exatidão:
@@ -45,73 +48,57 @@ Títulos e métricas alinhados com exatidão:
 | "Latência média" | `avgLatencyMs` | `Clock` |
 | "Taxa de sucesso" | `successRate` | `ShieldCheck` |
 
-### 🆕 Novo Endpoint `/api/analytics/compare` — **IMPLEMENTADO** (commit `9555c4fd`)
-Rota `GET /api/analytics/compare` em `server/src/routes/analytics.ts` (linhas 287–437). Fornece comparação período-atual vs período-anterior para cálculo dinâmico de trends nos StatCards.
+### ✅ Novo Endpoint `/api/analytics/compare` — **IMPLEMENTADO E CORRIGIDO**
+Rota `GET /api/analytics/compare` em `server/src/routes/analytics.ts`, endpoint totalmente revisado com 5 bugs corrigidos:
 
 - **Query params**: `range` (`7d`|`30d`|`90d`|`all`, padrão `7d`), `mode` (`requests`|`success`|`latency`|`savings`, padrão `requests`)
 - **Lógica**: período atual = `since(range)` → agora; período anterior = mesma duração imediatamente antes. Métricas de `request_hourly` (requests/success/error) e da tabela `requests` crua (latência, savings).
-- **Retorno atual** (formato a ser revisado — ver bugs abaixo):
-  ```json
-  {
-    "current":  { "range": "7d", "mode": "requests", "<chave-dinâmica>": <valor>, "totalRequests": N },
-    "previous": { "range": "7d", "mode": "requests", "<chave-dinâmica>": <valor>, "totalRequests": N },
-    "change": "+12.5%",
-    "trend": "up" | "down" | "neutral"
-  }
-  ```
 
-#### ⚠️ Bugs encontrados ao preparar o wiring do cliente (precisam ser corrigidos antes)
-1. **Chave dinâmica incoerente**: para `mode=requests`, a chave computada é `estimatedCostSavings` mas o valor é o total de requisições (só `success`→`successCount`, `latency`→`avgLatencyMs` têm nome correto).
-2. **`mode=success` compara contagem, não taxa**: usa `success_count` absoluto; o card "Taxa de sucesso" exibe taxa (0–1). Deveria comparar `success_count / (success_count + error_count)` por período.
-3. **Sinal negativo perdido**: `calculateChange` usa `sign = diff >= 0 ? '+' : ''` → queda de 12,5% renderiza como `"12.5%"` sem o `-`.
-4. **`range=all` quebra**: `duration = Infinity` → `prevStartMs = -Infinity` → `toSqliteDateTime(-Infinity)` gera data inválida.
-5. **`mode` não validado**: valor desconhecido cai silenciosamente em `default` (requests).
+**Bugs corrigidos no backend:**
+1. **Chave dinâmica incoerente** — agora usa contrato flat; cada modo retorna valor com chave semântica correta
+2. **`mode=success` compara contagem, não taxa** — agora compara taxa `success_count / (success_count + error_count)` (0–1), como o card exibe
+3. **Sinal negativo perdido** — `calculateChange` agora usa `sign = diff >= 0 ? '+' : '-'`; quedas renderizam `-X.X%` corretamente
+4. **`range=all` quebra** — agora detecta `range === 'all'` e usa `ALL_TIME_SINCE` para prev, evitando `duration = Infinity` → datas inválidas
+5. **`mode` não validado** — agora retorna 400 com mensagem clara se modo inválido for passado
 
-#### ✅ Formato alvo após correção (contrato do cliente)
+**Contrato do cliente (flat):**
 ```json
 { "current": 1234, "previous": 1100, "change": "+12.2%", "trend": "up" }
 ```
-Flat, tipado em `api.ts` como `CompareResult { current: number; previous: number; change: string; trend: 'up'|'down'|'neutral' }`.
+Tipado em `client/src/services/api.ts` como `CompareResult { current: number; previous: number; change: string; trend: 'up'|'down'|'neutral' }`.
 
-Esta substitui a necessidade dos `REFERENCE_VALUES` hardcoded no `DashboardPage.tsx`, permitindo que os trends sejam calculados a partir de dados históricos reais da base de dados.
+### ✅ Wiring DashboardPage ao `/api/analytics/compare` — **CONCLUÍDO**
+`DashboardPage.tsx` agora:
+- Chama `getAnalyticsCompare(timeRange, mode)` para os 4 modos em `Promise.all` ao lado dos outros loaders
+- Remove `REFERENCE_VALUES` hardcoded e `calculateChange()` local
+- `StatCard` aceita agora `trend: 'up' | 'down' | 'neutral'` (com ícone `Minus` em cinza para neutral)
+- Fallback para `'neutral'` se o compare falhar
+- Latência: aumento visualizado como `down` (ruim), queda como `up` (bom)
+- Tipos atualizados: `api.ts` agora usa contrato flat consistente com o backend
 
----
+### ✅ Alinhamento de contrato flat vs aninhado — **CONCLUÍDO**
+Tanto o backend (`server/src/routes/analytics.ts`) quanto o frontend (`client/src/services/api.ts`) foram alinhados ao mesmo contrato **flat**:
+- `current: number` — valor da métrica do período atual
+- `previous: number` — valor da métrica do período anterior
+- `change: string` — ex: `"+12.2%"` ou `"-3.2%"` (sinal preservado)
+- `trend: 'up' | 'down' | 'neutral'` — direção da mudança
 
-## Arquivos Alterados (estatísticas)
-
-```
-20 files changed, 2025 insertions(+), 155 deletions(-)
-
-Principais:
-- client/src/pages/DashboardPage.tsx     +481/-481  (rework completo)
-- client/src/services/api.ts             +161       (novo — API client)
-- client/src/components/ui/tabs.tsx      +65        (novo)
-- dashboard-final-state/                 +1.5k      (referência/target state)
-- vercel.json                            +13        (deploy config)
-- shared/tsconfig.json                   +20        (workspace config)
-```
+Backend também retorna opcional `context` com totais brutos para tooltips.
 
 ---
 
 ## Novos Endpoints de Analytics Usados
 
-O `api.ts` agora expõe:
-- `GET /analytics/summary?range=7d|30d|90d`
-- `GET /analytics/by-platform?range=...`
-- `GET /analytics/by-model?range=...`
-- `GET /analytics/timeline?range=...&interval=hour|day`
-- `GET /analytics/error-distribution?range=...`
-- `GET /analytics/errors?range=...&limit=...`
-- `GET /analytics/requests?range=...&limit=...`
-- `GET /analytics/search?range=...`
-- `GET /api/cache/stats` (response cache)
+O `api.ts` e o Dashboard agora consomem:
+- `GET /api/analytics/compare?range=7d&mode=requests|success|latency|savings` — tendências dinâmicas
 - `GET /api/health` (health check corrigido)
+- Mantidos: `/analytics/summary`, `/analytics/by-platform`, `/analytics/by-model`, `/analytics/timeline`, `/analytics/error-distribution`, `/analytics/errors`, `/analytics/requests`, `/analytics/search`
 
 ---
 
-## Recurso Referenciado Mas Não Implementado
+## Recursos Referenciados Não Implementados (fora do escopo imediato)
 
-**QUICK_ACTIONS no DashboardPage.tsx** inclui:
+**QUICK_ACTIONS no DashboardPage.tsx** inclui rotas que ainda não existem:
 ```tsx
 { label: 'Novo relatório', href: '/reports', icon: BarChart3 }
 { label: 'Enviar mensagem', href: '/messages', icon: Send }
@@ -135,14 +122,20 @@ MOCK_API=1 npm run dev
 
 ## Próximos Passos Recomendados
 
-1. ⚠️ **Wiring DashboardPage ao `/api/analytics/compare`** — Cliente (`DashboardPage.tsx`) ainda usa `REFERENCE_VALUES`/`calculateChange` fixos. Precisa: adicionar `getAnalyticsCompare` no `api.ts`, substituir cálculo por resposta real, ajustar tipos de `trend` para aceitar `'up'|'down'|'neutral'`.
-2. ⚠️ **Corrigir bugs no backend `/compare`** antes do wiring completo:
-   - Chave dinâmica incoerente (key dependente de mode, mas valor não coincide)
-   - `mode=success` compara contagem abs. vs taxa (0–1) que o card exibe
-   - Sinal negativo perdido em `calculateChange` (diff < 0 renderiza sem `-`)
-   - `range=all` quebra (duration Infinity → datas inválidas)
-   - Falta de validação de `mode`
-3. ✅ **Alinhar títulos dos cards** aos dados reais ou renomear métricas — **CONCLUÍDO**
-4. ✅ **Corrigir trends hardcoded** → cálculo delta (via `/compare`) — **CONCLUÍDO** nos commits anteriores (temporário com REFERENCE_VALUES)
-5. **Implementar `/reports`** se "Novo relatório" for feature desejada
-6. **Remover `dashboard-final-state/`** se for apenas referência temporária
+### ⬜ Implementar rotas auxiliares (`/reports`, `/messages`, `/settings`, `/sync`, `/activity`, `/analytics`, `/profile`)
+Botões e links no Dashboard e bottom navigation apontam para páginas que não foram criadas ainda. Necessário se essas features forem desejadas.
+
+### ⬜ Remover `dashboard-final-state/` se for apenas referência temporária
+Arquivo de referência para o target state do dashboard.
+
+### ⬜ Testes de integração
+Validar que o endpoint `/compare` responde corretamente para os 4 modos em diferentes ranges (`7d`, `30d`, `90d`, `all`).
+
+---
+
+## Histórico de Documentação (commits deste trabalho)
+
+| Commit | Autor | Mensagem |
+|--------|-------|----------|
+| `cf1d575e` | Jhonata | docs, client: document analytics compare endpoint and add getAnalyticsCompare client |
+| `6c6dd538` | Jhonata | fix(analytics): fix /compare endpoint bugs; wire DashboardPage to real compare data |
