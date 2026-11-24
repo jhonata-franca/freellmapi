@@ -1,0 +1,14 @@
+[phases.setup]
+nixPkgs = ["nodejs-22", "python3", "sqlite", "pkg-config", "openssl"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[phases.assets]
+cmds = []
+
+[start]
+cmd = "npm start"

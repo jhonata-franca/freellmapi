@@ -452,6 +452,178 @@ above it — that is what trips the next request to `429`. Keys deleted since th
 month began report under platform `removed` with no caps. Only the **unified**
 proxy key may call this route; client-profile keys get `403`.
 
+## Analytics API
+
+The analytics API provides insights into API usage patterns, performance, and errors. All endpoints accept a `range` query parameter (`7d|30d|90d|all|24h`) to select the time window, and some accept additional parameters.
+
+### `GET /analytics/summary`
+
+Returns headline statistics for the selected range: total requests, success rate, token counts, latency percentiles, cost savings, and request-type breakdown.
+
+**Query parameters:**
+- `range` (optional, default: `7d`) — `7d|30d|90d|all|24h`
+
+**Response:**
+- `totalRequests` — total number of requests in the window
+- `successRate` — success rate as percentage (success / (success + error))
+- `totalInputTokens` — total input tokens
+- `totalOutputTokens` — total output tokens
+- `avgLatencyMs` — average latency in milliseconds
+- `p50LatencyMs` — 50th percentile latency
+- `p95LatencyMs` — 95th percentile latency
+- `avgTtfbMs` — average time-to-first-token
+- `requestTypeCounts` — `{ chat: number, embedding: number }` split
+- `estimatedCostSavings` — estimated cost savings in USD
+- `pinnedRequests` — requests where a specific model was pinned
+- `pinHonoredRequests` — pinned requests that were honored (no failover)
+- `firstRequestAt` — first request timestamp in the window
+- `lifetimeTotalRequests` — total requests since install (survives pruning)
+
+### `GET /analytics/by-platform`
+
+Returns per-platform statistics grouped by endpoint (platform + base_url). Uses the serving key's base_url as the endpoint identifier so custom relays are not collapsed into a single "custom" row.
+
+**Query parameters:**
+- `range` (optional, default: `7d`) — `7d|30d|90d|all|24h`
+
+**Response per platform:**
+- `platform` — platform slug (e.g., `groq`, `anthropic`)
+- `providerId` — stable endpoint id (`<platform>` or `custom:<base_url>`)
+- `endpoint` — human-readable endpoint name
+- `requests` — total request count
+- `successRate` — success rate percentage
+- `avgLatencyMs` — average latency
+- `p95LatencyMs` — 95th percentile latency
+- `avgTtfbMs` — average time-to-first-token
+- `errorCount` — error count
+- `avgTokensPerSecond` — average tokens per second
+- `totalInputTokens` — total input tokens
+- `totalOutputTokens` — total output tokens
+
+### `GET /analytics/by-model`
+
+Returns per-model statistics grouped by (platform, endpoint, model_id). Same endpoint-scoping as /by-platform to avoid the #889 collision where every custom relay's model appears merged under "custom".
+
+**Query parameters:**
+- `range` (optional, default: `7d`) — `7d|30d|90d|all|24h`
+
+**Response per model:**
+- `platform` — platform slug
+- `providerId` — stable endpoint id
+- `endpoint` — human-readable endpoint name
+- `modelId` — model identifier
+- `displayName` — model display name
+- `requests` — total request count for this model
+- `successRate` — success rate percentage
+- `avgLatencyMs` — average latency
+- `totalInputTokens` — total input tokens
+- `totalOutputTokens` — total output tokens
+- `pinnedRequests` — requests where client pinned this specific model
+- `estimatedCost` — estimated cost in USD for this model's requests
+
+### `GET /analytics/timeline`
+
+Returns hourly or daily aggregated counts over the selected range. Reads from the `request_hourly` aggregate table for accuracy beyond the raw-row prune window.
+
+**Query parameters:**
+- `range` (optional, default: `7d`) — `7d|30d|90d|all|24h`
+- `interval` (optional, default: `day` for ranges > 24h, `hour` for `24h`) — `hour|day`
+
+**Response array:**
+- `timestamp` — formatted as `YYYY-MM-DDTHH:00:00` (hour) or `YYYY-MM-DD` (day)
+- `requests` — total requests in the bucket
+- `successCount` — successful requests
+- `failureCount` — failed requests
+- `inputTokens` — total input tokens
+- `outputTokens` — total output tokens
+
+### `GET /analytics/error-distribution`
+
+Returns error counts grouped by category and platform. Also returns overall counts by category and per-platform breakdown with provider IDs.
+
+**Query parameters:**
+- `range` (optional, default: `7d`) — `7d|30d|90d|all|24h`
+
+**Response:**
+- `byCategory` — array of `{ category, count }` sorted by count desc. Categories: Rate Limited (429), Auth Error (401), Forbidden (403), Not Found (404), Timeout/Connection, Server Error (500), Unavailable (503), Other
+- `byPlatform` — array of `{ platform, providerId, endpoint, count }` sorted by count desc
+- `detailed` — array of `{ platform, modelId, errorCategory, count }` sorted by count desc
+
+### `GET /analytics/errors`
+
+Returns the most recent errors (up to 50) with full context including platform, endpoint, model, and latency.
+
+**Query parameters:**
+- `range` (optional, default: `7d`) — `7d|30d|90d|all|24h`
+- `limit` (optional, default: `50`, max `500`) — number of errors to return
+
+**Response array:**
+- `id` — error record id
+- `platform` — platform slug
+- `providerId` — stable endpoint id
+- `endpoint` — human-readable endpoint name
+- `modelId` — model identifier (null if not applicable)
+- `error` — error message string
+- `latencyMs` — latency in milliseconds
+- `createdAt` — ISO timestamp
+
+### `GET /analytics/requests`
+
+Returns recent proxied requests with caller discrimination (IP + User-Agent). Supports filtering by status and provider/platform.
+
+**Query parameters:**
+- `range` (optional, default: `7d`) — `7d|30d|90d|all|24h`
+- `limit` (optional, default: `20`, max `500`) — max rows to return
+- `offset` (optional, default: `0`) — row offset for pagination
+- `status` (optional) — filter by `success`, `error`, or `canceled`
+- `provider` (optional) — filter by provider id or `custom`
+- `platform` (optional) — filter by platform slug
+
+**Response array:**
+- `id` — request record id
+- `platform` — platform slug
+- `providerId` — stable endpoint id
+- `endpoint` — human-readable endpoint name
+- `modelId` — model identifier (may be null)
+- `requestType` — `chat` or `embedding`
+- `status` — `success|error|canceled`
+- `inputTokens` — input tokens for the request
+- `outputTokens` — output tokens for the request
+- `latencyMs` — latency in milliseconds
+- `error` — error message (null if success)
+- `clientIp` — caller's IP address
+- `clientUserAgent` — caller's User-Agent
+- `clientAgent` — client agent identifier
+- `createdAt` — ISO timestamp
+
+### `GET /analytics/search`
+
+Returns search analytics for the selected range.
+
+**Query parameters:**
+- `range` (optional, default: `7d`) — `7d|30d|90d|all|24h`
+
+**Response:**
+- `searches` — total number of searches
+- `successRate` — success rate percentage
+- `avgLatencyMs` — average latency
+- `byProvider` — array of `{ provider, searches, successRate, avgLatencyMs }` sorted by searches desc
+
+### `GET /api/cache/stats`
+
+Returns response cache statistics.
+
+**Response:**
+- Cache hit/miss counts, ratios, and other metadata about the response caching layer
+
+### `GET /api/health`
+
+Health check endpoint returning the server status.
+
+**Response:**
+- `status` — server status string (e.g., "ok")
+- `timestamp` — ISO timestamp of the health check
+
 ## Free-tier budget API
 
 `GET /api/free-tier` returns the operator's free-tier budget as a **pool-deduped** monthly overview. Many models on one platform share the same free pool, so summing every model's label would double-count; the endpoint collapses models into quota pools (`inferQuotaPoolKey`) and reports **one documented budget per pool** (the largest `parseBudget` value seen in it), scaled by the number of usable (enabled + healthy/unknown) keys for the platform. Chain-disabled rows still contribute to a pool — they share the same provider allowance — and are only marked, never dropped, so the totals match the dashboard's stacked per-model bar.

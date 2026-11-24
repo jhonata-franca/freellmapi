@@ -4,6 +4,10 @@
 
 Doc revision history for `docs/api/`, seeded from API-relevant commits.
 
+## 2026-11-22
+
+- **docs(api): document analytics endpoints** — added the Analytics API section to `01-rest-api.md`: `GET /analytics/summary` (headline totals, success rate over success+error, p50/p95 latency, TTFB, chat/embedding split, estimated savings, pin-honor, lifetime totals), `GET /analytics/by-platform` and `GET /analytics/by-model` (endpoint-scoped grouping, `providerId` = `<platform>` or `custom:<base_url>` to avoid the #889 custom-relay collision), `GET /analytics/timeline` (from the durable `request_hourly` aggregate, `interval=hour|day`), `GET /analytics/error-distribution` (category buckets incl. 429/401/403/404/timeout/5xx/503), `GET /analytics/errors` and `GET /analytics/requests` (recency lists with `limit`/`offset` and `status`/`provider`/`platform` filters), and `GET /analytics/search`; plus the operator helpers `GET /api/cache/stats` and `GET /api/health`. All range-scoped endpoints share `range=7d|30d|90d|all|24h`. Updated `docs/en/api/OVERVIEW.md` index. Source: `server/src/routes/analytics.ts`, `client/src/services/api.ts`.
+
 ## 2026-10-23
 
 - **fix(api): client-profile keys now authenticate `/v1/messages` and `/v1beta`** — the `sk-cp-*` keys from #411 were accepted only by `/v1/chat/completions` and `/v1/responses`; the Anthropic and Gemini surfaces still compared the unified key alone, so a downstream app speaking the Claude or Gemini wire format got `401` with its own profile key. Both routes now resolve through `resolveAuth`: profile keys carry their server-enforced system prompt (injected first, after compression on `/v1/messages`, ahead of `systemInstruction` on `/v1beta` — same ordering contract), and a disabled profile fails like a bad key. Source: `server/src/routes/anthropic.ts`, `server/src/routes/gemini.ts`.

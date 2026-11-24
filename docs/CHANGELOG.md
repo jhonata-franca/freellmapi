@@ -2,6 +2,14 @@
 
 Revision history for `docs/`, derived from git commits touching this directory. Most recent first. Rows marked "landed via #N" describe work done on a contributor branch and squash-merged; the commit shown is the squash on `main`.
 
+## 2026-11-22 — Dashboard range selector & real API data
+
+| Commit | Date | Summary |
+| --- | --- | --- |
+| `7de2c233` | 2026-11-21 | feat(dashboard): add range selector (7d/30d/90d/all/24h) and real API data in Performance tab |
+| `13a55b48` | 2026-11-21 | fix(dashboard): health check path (`/api/health`), "Taxa de sucesso" card with correct trend, visible error state on API failure |
+| `3f050b8d`–`f79749f9` | 2026-11-21 | fix(vercel): 11 commits resolving monorepo root, workspace deps, tsconfig paths, CORS for production deploy |
+
 ## 2026-09-05 — Per-language structure
 
 | Commit | Date | Summary |
