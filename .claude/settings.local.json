@@ -11,7 +11,8 @@
       "Bash(git commit -m 'fix\\(shared\\): add tsconfig.json with composite:true and fix\\(client\\): add @freellmapi/shared dependency *)",
       "Bash(git push *)",
       "Bash(/data/data/com.termux/files/usr/bin/cloudflared version *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(git push *bnp)"
     ]
   }
 }
