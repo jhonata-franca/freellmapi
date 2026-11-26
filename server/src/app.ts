@@ -60,8 +60,8 @@ const DEFAULT_DASHBOARD_ORIGINS = [
   'http://127.0.0.1:5173',
   'http://[::1]:5173',
   // Deploy no Vercel: produção + preview do branch main
-  'https://freellmapi-c5v5iguxy-clyx.vercel.app',
-  'https://freellmapi-git-main-clyx.vercel.app',
+  'https://freellmapi-rugr.vercel.app',
+  'https://freellmapi-rugr-git-main.vercel.app',
 ];
 
 // SHA-256 of the inline theme/direction bootstrap in client/index.html, which
