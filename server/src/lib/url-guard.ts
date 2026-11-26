@@ -238,6 +238,10 @@ export async function assessProviderUrl(rawUrl: string, opts: AssessOptions = {}
   let addresses: string[];
   if (net.isIP(hostname)) {
     addresses = [hostname];
+  } else if (hostname === 'localhost' || hostname.endsWith('.localhost')) {
+    // *.localhost subdomains (e.g., ollama.localhost) resolve to 127.0.0.1 per RFC 6761.
+    // Treat them as loopback without doing a DNS lookup (which may fail on some platforms).
+    addresses = ['127.0.0.1'];
   } else {
     try {
       addresses = await (opts.resolve ?? defaultResolve)(hostname);

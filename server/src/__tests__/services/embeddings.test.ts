@@ -350,6 +350,8 @@ describe('embeddings service', () => {
     });
 
     it('splits cloudflare account_id:token keys', async () => {
+      // Disable remote neuron analytics to prevent background GraphQL call from interfering with the test
+      process.env.CLOUDFLARE_NEURON_ANALYTICS = '0';
       addKey('cloudflare', 'acct-123:cf-token-xyz');
       const fetchMock = mockFetch(async () => okEmbeddingResponse(1024));
 

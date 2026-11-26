@@ -48,6 +48,8 @@ describe('renewable audio routes', () => {
     expect(JSON.parse(String(fetch.mock.calls[0][1]?.body))).toEqual({ model, input: 'hello', voice_id: 'gb_jane_neutral', response_format: 'mp3' });
   });
   it.each(['@cf/deepgram/aura-1', '@cf/deepgram/aura-2-en', '@cf/deepgram/aura-2-es'])('uses text and binary MP3 for %s', async model => {
+    // Disable remote neuron analytics to prevent background GraphQL call from interfering with the test
+    process.env.CLOUDFLARE_NEURON_ANALYTICS = '0';
     seed('cloudflare', model, 'audio');
     const fetch = vi.spyOn(global, 'fetch').mockResolvedValue(new Response(mp3));
     expect((await runSpeech(model, { input: 'hello' })).audio).toEqual(mp3);

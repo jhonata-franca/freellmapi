@@ -111,6 +111,8 @@ describe('decision service', () => {
   });
 
   it('sends Clairic fields, preserves nullable values and excludes it from choice auto-routing', async () => {
+    // Disable remote neuron analytics to prevent background GraphQL call from interfering with the test
+    process.env.CLOUDFLARE_NEURON_ANALYTICS = '0';
     seed('cloudflare', '@cf/cloudflare/clairic'); addKey('cloudflare', 'acct:tok');
     const request = { state: 'Invoice INV-2291: four units at $250 plus $80 shipping.', fields: { invoice_number: { type: 'text' as const }, total: { type: 'number' as const, decimals: 2, unit: 'USD' } } };
     const answers = { invoice_number: { type: 'text', value: null, p_null: 1 }, total: { type: 'number', value: 1080 } };
@@ -134,6 +136,8 @@ describe('decision service', () => {
   });
 
   it('calls Cloudflare ai/run with the account from the key and the short model selector', async () => {
+    // Disable remote neuron analytics to prevent background GraphQL call from interfering with the test
+    process.env.CLOUDFLARE_NEURON_ANALYTICS = '0';
     addKey('cloudflare', 'acct123:cf-token');
     const fn = mockFetch(() => json({ success: true, result: { model: 'clef-flash', answers: ANSWERS, usage: { input_tokens: 219, output_tokens: 0 } } }));
     const out = await runDecision(REQUEST, { clientAgent: null });

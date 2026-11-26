@@ -183,4 +183,42 @@ describe('Full Integration Flow', () => {
     expect(body.error.code).toBe('model_not_found');
     expect(body.error.message).toContain('is disabled');
   });
+
+  // ── /api/analytics/compare integration tests ────────────────────────────────
+  // 4 modes × 4 ranges = 16 test cases
+  const RANGES = ['7d', '30d', '90d', 'all'] as const;
+  const MODES = ['requests', 'savings', 'success', 'latency'] as const;
+
+  for (const range of RANGES) {
+    for (const mode of MODES) {
+      it(`Step 13+${RANGES.indexOf(range) * 4 + MODES.indexOf(mode) + 1}: GET /api/analytics/compare?range=${range}&mode=${mode} returns valid response`, async () => {
+        const { status, body } = await req(app, 'GET', `/api/analytics/compare?range=${range}&mode=${mode}`);
+        expect(status).toBe(200);
+        expect(body).toHaveProperty('current');
+        expect(body).toHaveProperty('previous');
+        expect(body).toHaveProperty('change');
+        expect(body).toHaveProperty('trend');
+        expect(['up', 'down', 'neutral']).toContain(body.trend);
+        expect(typeof body.change).toBe('string');
+        // When previous === 0, change is "0.0%" (neutral, no sign)
+        expect(body.change).toMatch(/^([+-]\d+\.\d|0\.0)%$/);
+        expect(body).toHaveProperty('context');
+        expect(body.context).toHaveProperty('range', range);
+        expect(body.context).toHaveProperty('mode', mode);
+      });
+    }
+  }
+
+  it('rejects invalid mode', async () => {
+    const { status, body } = await req(app, 'GET', '/api/analytics/compare?range=7d&mode=invalid');
+    expect(status).toBe(400);
+    expect(body.error).toContain('invalid mode');
+  });
+
+  it('defaults to range=7d and mode=requests when omitted', async () => {
+    const { status, body } = await req(app, 'GET', '/api/analytics/compare');
+    expect(status).toBe(200);
+    expect(body.context.range).toBe('7d');
+    expect(body.context.mode).toBe('requests');
+  });
 });

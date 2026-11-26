@@ -124,6 +124,8 @@ describe('transcription service', () => {
   });
 
   it('uploads only the selected bytes of a shared buffer in multipart and binary requests', async () => {
+    // Disable remote neuron analytics to prevent background GraphQL call from interfering with the test
+    process.env.CLOUDFLARE_NEURON_ANALYTICS = '0';
     addKey('groq');
     addKey('cloudflare', 'acct123:token456');
     const file = Buffer.from(new SharedArrayBuffer(AUDIO.length + 2), 1, AUDIO.length);

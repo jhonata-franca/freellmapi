@@ -272,6 +272,8 @@ describe('media service', () => {
     });
 
     it('Cloudflare FLUX.1 Schnell: sends only the prompt and maps result.image', async () => {
+      // Disable remote neuron analytics to prevent background GraphQL call from interfering with the test
+      process.env.CLOUDFLARE_NEURON_ANALYTICS = '0';
       addMedia('cloudflare', '@cf/black-forest-labs/flux-1-schnell', 'image');
       addKey('cloudflare', 'acct123:token456');
       const fetchMock = vi.fn(async () => jsonResponse({ result: { image: 'CFB64' }, success: true }));
@@ -859,6 +861,8 @@ describe('media service', () => {
     });
 
     it('Cloudflare MeloTTS: base64 audio → audio/wav bytes', async () => {
+      // Disable remote neuron analytics to prevent background GraphQL call from interfering with the test
+      process.env.CLOUDFLARE_NEURON_ANALYTICS = '0';
       addMedia('cloudflare', '@cf/myshell-ai/melotts', 'audio');
       addKey('cloudflare', 'acct:tok');
       const fetchMock = vi.fn(async () => jsonResponse({ result: { audio: Buffer.from('WAV').toString('base64') } }));

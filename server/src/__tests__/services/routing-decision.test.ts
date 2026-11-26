@@ -88,6 +88,8 @@ describe('decision routing (#1354)', () => {
   });
 
   it('routes THIS request with the preset the decision model picked', async () => {
+    // Disable remote neuron analytics to prevent background GraphQL call from interfering with the test
+    process.env.CLOUDFLARE_NEURON_ANALYTICS = '0';
     addKey('cloudflare', 'acct:token');
     const fn = mockFetch(() => cloudflareAnswer('smartest', 0.82));
     const seen = await inRequest(async () => {
