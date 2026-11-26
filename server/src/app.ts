@@ -60,8 +60,10 @@ const DEFAULT_DASHBOARD_ORIGINS = [
   'http://127.0.0.1:5173',
   'http://[::1]:5173',
   // Deploy no Vercel: produção + preview do branch main
-  'https://freellmapi-rugr.vercel.app',
-  'https://freellmapi-rugr-git-main.vercel.app',
+  'https://freellmapi-rtgp.vercel.app',
+  'https://freellmapi-rtgp-git-main-clyx.vercel.app',
+  'https://freellmapi-rtgp-l0m5yc8ua-clyx.vercel.app',
+  // Vercel URLs hardcoded for CORS (fix for missing DASHBOARD_ORIGINS env var in Railway)
 ];
 
 // SHA-256 of the inline theme/direction bootstrap in client/index.html, which
@@ -206,7 +208,9 @@ export function createApp(config?: Config) {
   app.use(collapseDoubledV1Prefix);
   app.use(cors({
     origin(origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) {
-      callback(null, !origin || allowedCorsOrigins.has(origin));
+      // Always allow Vercel domains explicitly (fallback if env var not loaded)
+      const vercelOrigins = ['https://freellmapi-rtgp.vercel.app', 'https://freellmapi-rtgp-git-main-clyx.vercel.app', 'https://freellmapi-rtgp-l0m5yc8ua-clyx.vercel.app'];
+      callback(null, !origin || allowedCorsOrigins.has(origin) || vercelOrigins.includes(origin));
     },
   }));
   // Two-tier JSON body limits. The LLM wire surfaces carry vision payloads —
