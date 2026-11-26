@@ -153,7 +153,7 @@ export async function getAnalyticsCompare(
   range: string = '7d',
   mode: CompareMode = 'requests',
 ): Promise<CompareResult> {
-  return fetchJson<CompareResult>(`/api/analytics/compare?range=${range}&mode=${mode}`);
+  return fetchJson<CompareResult>(`/analytics/compare?range=${range}&mode=${mode}`);
 }
 
 export async function getByPlatform(range: string = '7d'): Promise<ByPlatformItem[]> {
