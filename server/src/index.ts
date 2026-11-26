@@ -154,3 +154,4 @@ main().catch((err) => {
   console.error('\n[server] Failed to start:\n  ' + (err?.message ?? err) + '\n');
   process.exit(1);
 });
+// Force redeploy
